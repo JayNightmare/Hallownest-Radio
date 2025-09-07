@@ -8,6 +8,8 @@ import {
     Volume2,
     VolumeX,
     List,
+    Shuffle,
+    Repeat,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Slider } from "./ui/slider";
@@ -71,6 +73,9 @@ export function MediaPlayer() {
     const [isMuted, setIsMuted] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [showPlaylist, setShowPlaylist] = useState(false);
+    const [isRepeat, setIsRepeat] = useState(false);
+    const [isShuffle, setIsShuffle] = useState(false);
+    const [shuffleOrder, setShuffleOrder] = useState<number[]>([]);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -101,6 +106,24 @@ export function MediaPlayer() {
     useEffect(() => {
         setPlaylist(discoveredTracks);
     }, [discoveredTracks]);
+
+    // Shuffle order logic
+    useEffect(() => {
+        if (isShuffle && playlist.length > 0) {
+            // Generate a shuffled order, but keep current track at front
+            const indices = playlist.map((_, i) => i);
+            // Remove currentTrack from indices
+            const rest = indices.filter((i) => i !== currentTrack);
+            // Shuffle rest
+            for (let i = rest.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [rest[i], rest[j]] = [rest[j], rest[i]];
+            }
+            setShuffleOrder([currentTrack, ...rest]);
+        } else {
+            setShuffleOrder([]);
+        }
+    }, [isShuffle, playlist, currentTrack]);
 
     const track = playlist[currentTrack];
 
@@ -227,17 +250,37 @@ export function MediaPlayer() {
     };
 
     const nextTrack = () => {
-        setCurrentTrack((prev) => {
-            if (playlist.length === 0) return 0;
-            return (prev + 1) % playlist.length;
-        });
+        if (playlist.length === 0) return;
+        if (isShuffle && shuffleOrder.length > 0) {
+            const idx = shuffleOrder.indexOf(currentTrack);
+            if (idx < shuffleOrder.length - 1) {
+                setCurrentTrack(shuffleOrder[idx + 1]);
+            } else if (isRepeat) {
+                setCurrentTrack(shuffleOrder[0]);
+            }
+        } else {
+            setCurrentTrack((prev) => {
+                if (prev < playlist.length - 1) return prev + 1;
+                return isRepeat ? 0 : prev;
+            });
+        }
     };
 
     const prevTrack = () => {
-        setCurrentTrack((prev) => {
-            if (playlist.length === 0) return 0;
-            return (prev - 1 + playlist.length) % playlist.length;
-        });
+        if (playlist.length === 0) return;
+        if (isShuffle && shuffleOrder.length > 0) {
+            const idx = shuffleOrder.indexOf(currentTrack);
+            if (idx > 0) {
+                setCurrentTrack(shuffleOrder[idx - 1]);
+            } else if (isRepeat) {
+                setCurrentTrack(shuffleOrder[shuffleOrder.length - 1]);
+            }
+        } else {
+            setCurrentTrack((prev) => {
+                if (prev > 0) return prev - 1;
+                return isRepeat ? playlist.length - 1 : prev;
+            });
+        }
     };
 
     const toggleMute = () => setIsMuted(!isMuted);
@@ -257,9 +300,13 @@ export function MediaPlayer() {
     const handleTrackSelect = (index: number) => {
         setCurrentTrack(index);
         setShowPlaylist(false);
+        // If shuffle is enabled, regenerate shuffle order with new currentTrack
+        if (isShuffle) {
+            // This will trigger the shuffleOrder effect
+        }
     };
 
-    const formattedTrackDuration = () => {
+    const formattedTrackDuration = (track: Track | null) => {
         if (!track) return "--:--";
         if (track.durationSeconds) return formatTime(track.durationSeconds);
         return "--:--";
@@ -284,17 +331,17 @@ export function MediaPlayer() {
                 </Button>
 
                 {/* Album Art Placeholder */}
-                <motion.div
+                <Button
+                    variant={"ghost"}
+                    onClick={togglePlay}
                     className="w-48 h-48 mx-auto mb-6 rounded-xl bg-gradient-to-br from-orange-900/30 to-blue-900/30 flex flex-col items-center justify-center border border-border/30 overflow-hidden"
-                    whileHover={{ scale: 1.02 }}
-                    transition={{ type: "spring", stiffness: 300 }}
                 >
                     <div className="text-4xl opacity-40 mb-2">🎵</div>
                     <Visualizer
                         isPlaying={isPlaying}
                         volume={isMuted ? 0 : volume}
                     />
-                </motion.div>
+                </Button>
 
                 {/* Track Info */}
                 <div className="text-center mb-6">
@@ -337,12 +384,25 @@ export function MediaPlayer() {
                     />
                     <div className="flex justify-between text-xs text-muted-foreground mt-2">
                         <span>{formatTime(currentTime)}</span>
-                        <span>{formattedTrackDuration()}</span>
+                        <span>{formattedTrackDuration(track)}</span>
                     </div>
                 </div>
 
                 {/* Controls */}
                 <div className="flex items-center justify-center gap-4 mb-6">
+                    {/* Repeat */}
+                    <Button
+                        variant={isRepeat ? "secondary" : "outline"}
+                        size="sm"
+                        className={`hover:bg-accent/50 ${
+                            isRepeat ? "border-primary text-primary" : ""
+                        }`}
+                        onClick={() => setIsRepeat((r) => !r)}
+                        aria-pressed={isRepeat}
+                        title="Repeat"
+                    >
+                        <Repeat className="w-5 h-5" />
+                    </Button>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -375,6 +435,22 @@ export function MediaPlayer() {
                         className="hover:bg-accent/50"
                     >
                         <SkipForward className="w-5 h-5" />
+                    </Button>
+
+                    {/* Shuffle */}
+                    <Button
+                        variant={isShuffle ? "secondary" : "outline"}
+                        size="sm"
+                        className={`hover:bg-accent/50 ${
+                            isShuffle
+                                ? "border-primary text-primary"
+                                : "text-primary"
+                        }`}
+                        onClick={() => setIsShuffle((s) => !s)}
+                        aria-pressed={isShuffle}
+                        title={isShuffle ? "Disable Shuffle" : "Enable Shuffle"}
+                    >
+                        <Shuffle className="w-5 h-5" />
                     </Button>
                 </div>
 
@@ -431,7 +507,7 @@ export function MediaPlayer() {
                         // Provide a string duration for UI if loaded
                         duration: t.durationSeconds
                             ? formatTime(t.durationSeconds)
-                            : "--:--",
+                            : "",
                     })) as any
                 }
                 currentTrack={currentTrack}

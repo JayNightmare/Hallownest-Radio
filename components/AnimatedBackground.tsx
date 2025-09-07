@@ -68,7 +68,7 @@ export function AnimatedBackground() {
             <div>
                 {/* insert background image */}
                 <img
-                    src="/public/background.webp"
+                    src="https://github.com/JayNightmare/Hallownest-Radio/blob/main/public/background.webp?raw=true"
                     alt="Background"
                     className="absolute inset-0 object-cover w-full h-full opacity-5"
                 />
